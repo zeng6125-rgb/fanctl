@@ -2,6 +2,7 @@
 CoolDeck/bin/
 CoolDeck/obj/
 *.exe
+*.zip
 
 # runtime / verification artefacts
 *.log
