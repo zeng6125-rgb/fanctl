@@ -1,0 +1,14 @@
+# build output
+CoolDeck/bin/
+CoolDeck/obj/
+*.exe
+
+# runtime / verification artefacts
+*.log
+CoolDeck/shot_*.png
+
+# editor / OS noise
+.vs/
+*.user
+Thumbs.db
+Desktop.ini
