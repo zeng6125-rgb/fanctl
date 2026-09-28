@@ -216,6 +216,10 @@ namespace CoolDeck
                     SnapsToDevicePixels = true
                 };
                 b.MouseLeftButtonUp += delegate { Select(idx); };
+                // Hover wash so the row feels alive: the selected cell keeps its gradient,
+                // the rest lift to HoverTint while the pointer is over them.
+                b.MouseEnter += delegate { _hover = idx; Restyle(idx); };
+                b.MouseLeave += delegate { if (_hover == idx) _hover = -1; Restyle(idx); };
                 _cells.Add(b);
                 _labels.Add(tb);
                 Children.Add(b);
@@ -227,17 +231,22 @@ namespace CoolDeck
         {
             if (i < 0 || i >= _cells.Count) return;
             Selected = i;
-            for (int k = 0; k < _cells.Count; k++)
-            {
-                bool on = k == i;
-                _cells[k].Background = on ? Theme.AccentGradient() : (Brush)Theme.B(Theme.Chip);
-                _cells[k].BorderBrush = on ? Theme.B(Theme.SelLine) : Theme.B(Theme.ChipLine);
-                _labels[k].Foreground = on ? Theme.B(Theme.OnAccent) :
-                    (_inert[k] ? Theme.B(Theme.TxtInert) : Theme.TxtDimBrush);
-                _labels[k].FontWeight = on ? FontWeights.SemiBold : FontWeights.Normal;
-            }
+            for (int k = 0; k < _cells.Count; k++) Restyle(k);
             var h = Changed;
             if (h != null) h(i);
+        }
+
+        int _hover = -1;
+
+        void Restyle(int k)
+        {
+            bool on = k == Selected;
+            _cells[k].Background = on ? Theme.AccentGradient()
+                : (k == _hover ? Theme.B(Theme.HoverTint) : (Brush)Theme.B(Theme.Chip));
+            _cells[k].BorderBrush = on ? Theme.B(Theme.SelLine) : Theme.B(Theme.ChipLine);
+            _labels[k].Foreground = on ? Theme.B(Theme.OnAccent) :
+                (_inert[k] ? Theme.B(Theme.TxtInert) : Theme.TxtDimBrush);
+            _labels[k].FontWeight = on ? FontWeights.SemiBold : FontWeights.Normal;
         }
 
         protected override Size MeasureOverride(Size avail)
@@ -555,6 +564,167 @@ namespace CoolDeck
         {
             if (IsMouseCaptured) ReleaseMouseCapture();
             base.OnMouseLeftButtonUp(e);
+        }
+    }
+
+    /// <summary>Hand-drawn replacement for the stock WPF Slider in the offset card. The
+    /// default template was the one visibly foreign control left in the window (square
+    /// thumb, flat grey track): this draws a 5 px rounded track with an accent fill and
+    /// a knob with a white core. Behaviour mirrors the old slider — click jumps, drag
+    /// scrubs, arrows nudge, everything snaps to Step — so the host code barely changes.</summary>
+    public class OffsetSlider : FrameworkElement
+    {
+        public double Minimum = 0, Maximum = 100, Step = 5;
+        double _v;
+        public event EventHandler ValueChanged;
+        /// <summary>Commit point: mouse-up after a change, or an arrow/Home/End key.</summary>
+        public event Action ValuePicked;
+        bool _hover, _drag;
+        double _gestureStart;
+
+        static readonly Brush FillBrush;
+        static readonly Brush HaloBrush;
+
+        static OffsetSlider()
+        {
+            var lg = new LinearGradientBrush(Theme.Accent, Theme.Accent2,
+                                             new Point(0, 0), new Point(1, 0));
+            lg.Freeze();
+            FillBrush = lg;
+            var halo = new SolidColorBrush(Color.FromArgb(0x2E, Theme.Accent.R,
+                                                          Theme.Accent.G, Theme.Accent.B));
+            halo.Freeze();
+            HaloBrush = halo;
+        }
+
+        public double Value
+        {
+            get { return _v; }
+            set
+            {
+                double nv = Math.Max(Minimum, Math.Min(Maximum, value));
+                if (Math.Abs(nv - _v) < 0.0001) return;
+                _v = nv;
+                InvalidateVisual();
+                var h = ValueChanged;
+                if (h != null) h(this, EventArgs.Empty);
+            }
+        }
+
+        public OffsetSlider()
+        {
+            Focusable = true;
+            Cursor = Cursors.Hand;
+            SnapsToDevicePixels = true;
+            MouseEnter += delegate { _hover = true; InvalidateVisual(); };
+            MouseLeave += delegate { _hover = false; InvalidateVisual(); };
+        }
+
+        double Fraction()
+        {
+            return Maximum <= Minimum ? 0 : (_v - Minimum) / (Maximum - Minimum);
+        }
+
+        protected override void OnRender(DrawingContext dc)
+        {
+            double w = ActualWidth, h = ActualHeight;
+            if (w < 30) return;
+            const double pad = 9;
+            double cy = h / 2.0;
+            double x0 = pad, x1 = w - pad;
+            double vx = x0 + Fraction() * (x1 - x0);
+
+            dc.DrawRoundedRectangle(Theme.B(Theme.Track), null,
+                                    new Rect(x0, cy - 2.5, x1 - x0, 5), 2.5, 2.5);
+            if (vx > x0 + 0.5)
+                dc.DrawRoundedRectangle(FillBrush, null,
+                                        new Rect(x0, cy - 2.5, vx - x0, 5), 2.5, 2.5);
+
+            double r = (_hover || _drag || IsKeyboardFocused) ? 8.5 : 8;
+            if (_hover || _drag)
+                dc.DrawEllipse(HaloBrush, null, new Point(vx, cy), r + 5, r + 5);
+            dc.DrawEllipse(Theme.B(Theme.Accent), null, new Point(vx, cy), r, r);
+            dc.DrawEllipse(Brushes.White, null, new Point(vx, cy), r - 4, r - 4);
+            if (IsKeyboardFocused)
+                dc.DrawEllipse(null, new Pen(Theme.B(Theme.SelLine), 1.5),
+                               new Point(vx, cy), r + 2.5, r + 2.5);
+        }
+
+        void SetFromX(double px)
+        {
+            const double pad = 9;
+            double f = (px - pad) / Math.Max(1, ActualWidth - pad * 2);
+            f = Math.Max(0, Math.Min(1, f));
+            Value = Math.Round((Minimum + f * (Maximum - Minimum)) / Step) * Step;
+        }
+
+        protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
+        {
+            Focus();
+            _drag = true;
+            _gestureStart = _v;
+            CaptureMouse();
+            SetFromX(e.GetPosition(this).X);
+            base.OnMouseLeftButtonDown(e);
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            if (_drag && IsMouseCaptured) SetFromX(e.GetPosition(this).X);
+            base.OnMouseMove(e);
+        }
+
+        protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
+        {
+            if (_drag)
+            {
+                _drag = false;
+                if (IsMouseCaptured) ReleaseMouseCapture();
+                InvalidateVisual();
+                if (Math.Abs(_v - _gestureStart) > 0.0001)
+                {
+                    var p = ValuePicked;
+                    if (p != null) p();
+                }
+            }
+            base.OnMouseLeftButtonUp(e);
+        }
+
+        protected override void OnGotKeyboardFocus(KeyboardFocusChangedEventArgs e)
+        {
+            InvalidateVisual();
+            base.OnGotKeyboardFocus(e);
+        }
+
+        protected override void OnLostKeyboardFocus(KeyboardFocusChangedEventArgs e)
+        {
+            InvalidateVisual();
+            base.OnLostKeyboardFocus(e);
+        }
+
+        protected override void OnKeyDown(KeyEventArgs e)
+        {
+            double nv = _v;
+            bool handled = true;
+            if (e.Key == Key.Left || e.Key == Key.Down) nv = _v - Step;
+            else if (e.Key == Key.Right || e.Key == Key.Up) nv = _v + Step;
+            else if (e.Key == Key.PageDown) nv = _v - Step * 2;
+            else if (e.Key == Key.PageUp) nv = _v + Step * 2;
+            else if (e.Key == Key.Home) nv = Minimum;
+            else if (e.Key == Key.End) nv = Maximum;
+            else handled = false;
+            if (handled)
+            {
+                e.Handled = true;
+                double old = _v;
+                Value = nv;
+                if (Math.Abs(_v - old) > 0.0001)
+                {
+                    var p = ValuePicked;
+                    if (p != null) p();
+                }
+            }
+            base.OnKeyDown(e);
         }
     }
 }

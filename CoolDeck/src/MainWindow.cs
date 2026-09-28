@@ -41,7 +41,7 @@ namespace CoolDeck
         readonly List<Border> _curveTabs = new List<Border>();
         int _curveFan;
 
-        Slider _offset;
+        OffsetSlider _offset;
         TextBlock _offsetVal;
         TextBlock _dllInfo, _status;
 
@@ -686,29 +686,20 @@ namespace CoolDeck
             top.Children.Add(_offsetVal);
             inner.Children.Add(top);
 
-            _offset = new Slider
+            _offset = new OffsetSlider
             {
-                Minimum = 0, Maximum = 100, Value = 0, Height = 22,
-                Margin = new Thickness(0, 4, 0, 0),
-                Foreground = Theme.AccentBrush,
-                // Clicking the track jumps straight there instead of nudging one SmallChange,
-                // which is what everyone expects from a slider and what the default template
-                // does not do unless you ask.
-                IsMoveToPointEnabled = true,
-                SmallChange = 5, LargeChange = 10,
-                IsSnapToTickEnabled = true, TickFrequency = 5
+                Minimum = 0, Maximum = 100, Value = 0, Step = 5, Height = 22,
+                Margin = new Thickness(0, 4, 0, 0)
             };
             _offset.ValueChanged += delegate
             {
                 int v = (int)Math.Round(_offset.Value);
                 _offsetVal.Text = v + " %";
             };
-            _offset.PreviewMouseUp += delegate { _ctl.SetOffset((int)Math.Round(_offset.Value)); SaveOffsetIntent((int)Math.Round(_offset.Value)); };
-            _offset.AddHandler(Slider.PreviewKeyUpEvent, new KeyEventHandler(delegate(object s, KeyEventArgs e)
-            {
-                _ctl.SetOffset((int)Math.Round(_offset.Value));
-                SaveProfile();
-            }), true);
+            // One commit path for mouse and keyboard alike. The old keyboard handler called
+            // SaveProfile() (re-capture live EC state); SaveOffsetIntent() is the correct one —
+            // it persists what the user asked for instead of absorbing firmware noise.
+            _offset.ValuePicked += delegate { _ctl.SetOffset((int)Math.Round(_offset.Value)); SaveOffsetIntent((int)Math.Round(_offset.Value)); };
             inner.Children.Add(_offset);
 
             // Presets. Offset is one-directional on this firmware: it only ever raises the
@@ -834,6 +825,20 @@ namespace CoolDeck
 
                 row.Children.Add(nm); row.Children.Add(rpm); row.Children.Add(duty); row.Children.Add(temp);
                 Grid.SetColumn(rpm, 1); Grid.SetColumn(duty, 2); Grid.SetColumn(temp, 3);
+                if (i > 0)
+                {
+                    // Hairline between rows so the four fans read as a table, not four
+                    // floating lines. Overlays the row's top edge; the 26 px row leaves
+                    // the centred text clear of it.
+                    var sep = new Border
+                    {
+                        Height = 1, Background = Theme.LineBrush,
+                        VerticalAlignment = VerticalAlignment.Top,
+                        SnapsToDevicePixels = true
+                    };
+                    Grid.SetColumnSpan(sep, 4);
+                    row.Children.Add(sep);
+                }
                 _sensorRpm.Add(rpm); _sensorDuty.Add(duty); _sensorTemp.Add(temp);
                 grid.Children.Add(row);
                 Grid.SetRow(row, i + 1);
@@ -894,7 +899,7 @@ namespace CoolDeck
 
             var on = new Trigger { Property = System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty, Value = true };
             on.Setters.Add(new Setter(Border.BackgroundProperty, Theme.AccentGradient(), "box"));
-            on.Setters.Add(new Setter(Border.BorderBrushProperty, Theme.B(Theme.AccentLine), "box"));
+            on.Setters.Add(new Setter(Border.BorderBrushProperty, Theme.B(Theme.SelLine), "box"));
             on.Setters.Add(new Setter(UIElement.VisibilityProperty, Visibility.Visible, "chk"));
             t.Triggers.Add(on);
 
