@@ -42,7 +42,8 @@ namespace CoolDeck
         public static Color HoverTint;    // generic hover wash
         public static Color AccentSoft;   // accent-tinted button background
         public static Color AccentSoftLine;
-        public static Color AccentLine;   // strong accent border (selected pill)
+        public static Color AccentLine;   // strong accent border (selected pill, dark theme)
+        public static Color SelLine;      // selected-pill/chip ring (per-theme, see Apply)
         public static Color OnAccent;     // text drawn ON an accent fill
         public static Color Danger;       // close-button glyph
         public static Color DangerHover;  // close-button hover background
@@ -169,6 +170,11 @@ namespace CoolDeck
             // OnAccent must contrast with the accent FILL, which is bright in both palettes.
             OnAccent = C(0x05, 0x10, 0x14);
             AccentLine = light ? C(0x0E, 0x74, 0x90) : C(0x3A, 0xE0, 0xF0);
+            // The selected ring sits between a neon fill and the card: in the light theme
+            // the dark-teal AccentLine reads as a 1 px black edge (pixel-verified), so the
+            // light ring is the lighter periwinkle end of the same gradient instead. Dark
+            // theme keeps the luminous cyan — it never had the problem.
+            SelLine = light ? Accent2 : AccentLine;
 
             Bg0Brush = B(Bg0); Bg1Brush = B(Bg1); CardBrush = B(Card);
             CardHiBrush = B(CardHi); LineBrush = B(Line);

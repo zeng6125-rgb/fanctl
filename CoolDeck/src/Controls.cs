@@ -166,6 +166,15 @@ namespace CoolDeck
         readonly List<TextBlock> _labels = new List<TextBlock>();
         readonly List<bool> _inert = new List<bool>();
 
+        public PillRow()
+        {
+            // 1 px borders on rounded pills land on half-pixels without this, and under
+            // software rendering the anti-aliased fringe reads as a black edge around the
+            // selected pill. Snap layout AND rendering to device pixels for crisp edges.
+            UseLayoutRounding = true;
+            SnapsToDevicePixels = true;
+        }
+
         public void SetItems(IList<string> items)
         {
             SetItems(items, null);
@@ -203,7 +212,8 @@ namespace CoolDeck
                     Padding = new Thickness(4, 0, 4, 0),
                     Margin = new Thickness(0, 0, 6, 0),
                     Child = tb,
-                    Cursor = Cursors.Hand
+                    Cursor = Cursors.Hand,
+                    SnapsToDevicePixels = true
                 };
                 b.MouseLeftButtonUp += delegate { Select(idx); };
                 _cells.Add(b);
@@ -221,7 +231,7 @@ namespace CoolDeck
             {
                 bool on = k == i;
                 _cells[k].Background = on ? Theme.AccentGradient() : (Brush)Theme.B(Theme.Chip);
-                _cells[k].BorderBrush = on ? Theme.B(Theme.AccentLine) : Theme.B(Theme.ChipLine);
+                _cells[k].BorderBrush = on ? Theme.B(Theme.SelLine) : Theme.B(Theme.ChipLine);
                 _labels[k].Foreground = on ? Theme.B(Theme.OnAccent) :
                     (_inert[k] ? Theme.B(Theme.TxtInert) : Theme.TxtDimBrush);
                 _labels[k].FontWeight = on ? FontWeights.SemiBold : FontWeights.Normal;

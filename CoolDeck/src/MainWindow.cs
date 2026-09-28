@@ -1056,6 +1056,10 @@ namespace CoolDeck
             var t = new ControlTemplate(typeof(Button));
             var bd = new FrameworkElementFactory(typeof(Border));
             bd.SetValue(Border.CornerRadiusProperty, new CornerRadius(6));
+            // Same black-fringe issue as the mode pills: 1 px border without pixel
+            // snapping under software rendering. SnapsToDevicePixels is inheritable,
+            // but the template Border is the element that actually draws the edge.
+            bd.SetValue(Border.SnapsToDevicePixelsProperty, true);
             bd.SetBinding(Border.BackgroundProperty,
                 new Binding("Background") { RelativeSource = RelativeSource.TemplatedParent });
             bd.SetBinding(Border.BorderBrushProperty,
@@ -1521,7 +1525,7 @@ namespace CoolDeck
         void StyleChip(Button b, bool on)
         {
             SetSkin(b, on ? Theme.AccentGradient() : (Brush)Theme.B(Theme.Chip),
-                      on ? Theme.B(Theme.AccentLine) : Theme.B(Theme.Line));
+                      on ? Theme.B(Theme.SelLine) : Theme.B(Theme.Line));
             b.Foreground = on ? Theme.B(Theme.OnAccent) : Theme.TxtDimBrush;
             b.FontWeight = on ? FontWeights.SemiBold : FontWeights.Normal;
         }
