@@ -188,6 +188,19 @@ namespace CoolDeck
             { "Silent and Noiseless do nothing on AC power here — for quiet use Offset 0% or the Quiet preset.",
               "在本固件上，插电时“静音/无声”模式不起作用 — 想要安静请把偏置设为 0% 或改用“安静”预设。" },
 
+            // ---------------- game mode ----------------
+            { "Game mode", "游戏模式" },
+            { "fan max \u00b7 game High priority \u00b7 recording off",
+              "风扇拉满 · 游戏高优先 · 关录制" },
+            { "game mode on — fans maxed, game gets High priority, recording off",
+              "游戏模式已开启 — 风扇拉满、游戏高优先、后台录制关闭" },
+            { "game mode off — Windows settings restored",
+              "游戏模式已关闭 — 系统设置已还原" },
+            { "game mode: VALORANT not found, skipped the fullscreen tweak",
+              "游戏模式：未找到无畏契约，已跳过全屏优化项" },
+            { "game detected — priority raised to High",
+              "已检测到游戏 — 进程优先级已提到“高”" },
+
             // ---------------- fan tabs / sensor table ----------------
             { "CPU Fan", "CPU 风扇" },
             { "GPU Fan", "GPU 风扇" },

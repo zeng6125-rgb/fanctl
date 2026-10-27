@@ -61,6 +61,10 @@ namespace CoolDeck
         bool _idlePoll;
         Profile _prof;
         CheckBox _autoApply;
+        CheckBox _gameMode;
+        TextBlock _gameModeHint;
+        bool _suppressGameMode;
+        int _gmPrevMode = -1;
         ScrollViewer _bodyScroll;
         int _maxRpm = 6000;
 
@@ -110,6 +114,50 @@ namespace CoolDeck
             }
             Trace.W("tray: applied saved curve, mode -> Custom");
             if (IsVisible) { MarkDirty(); Tick(); }
+        }
+
+        /// <summary>Entry point for the tray item and the toolbar switch. GameMode owns the
+        /// Windows-side state and its own rollback; the fan mode is ours, so we snapshot the
+        /// mode we found when turning on and put it back when turning off.</summary>
+        public void SetGameMode(bool on) { ApplyGameMode(on); }
+
+        void ApplyGameMode(bool on)
+        {
+            if (on == GameMode.Enabled) { SyncGameModeUi(); return; }
+            if (on)
+            {
+                _gmPrevMode = ModeNow();
+                GameMode.On();
+                if (_ctl.Ready)
+                {
+                    _ctl.SetMode(FanMode.Maximum);
+                    SaveModeIntent(FanMode.Maximum);
+                }
+                _status.Text = Loc.T("game mode on — fans maxed, game gets High priority, recording off");
+            }
+            else
+            {
+                GameMode.Off();
+                // Only restore the old fan mode if the EC is still in Maximum: if the user
+                // moved the fans themselves while gaming, that choice wins.
+                int cur = ModeNow();
+                if (cur == (int)FanMode.Maximum && _gmPrevMode >= 0 && _gmPrevMode != (int)FanMode.Maximum && _ctl.Ready)
+                {
+                    if ((FanMode)_gmPrevMode == FanMode.Custom) ApplySavedCurve();
+                    else { _ctl.SetMode((FanMode)_gmPrevMode); SaveModeIntent((FanMode)_gmPrevMode); }
+                }
+                _gmPrevMode = -1;
+                _status.Text = Loc.T("game mode off — Windows settings restored");
+            }
+            SyncGameModeUi();
+            if (IsVisible) Tick();
+        }
+
+        void SyncGameModeUi()
+        {
+            _suppressGameMode = true;
+            if (_gameMode != null) _gameMode.IsChecked = GameMode.Enabled;
+            _suppressGameMode = false;
         }
 
         static readonly FanMode[] ModeList = {
@@ -903,7 +951,15 @@ namespace CoolDeck
             on.Setters.Add(new Setter(UIElement.VisibilityProperty, Visibility.Visible, "chk"));
             t.Triggers.Add(on);
 
+            // Keyboard focus gets a ring on the box itself. The stock WPF focus adorner is a
+            // dotted rectangle drawn around the WHOLE control, which on a full-width checkbox
+            // is a long dashed line trailing off to the right — visibly broken next to cards.
+            var focus = new Trigger { Property = UIElement.IsKeyboardFocusedProperty, Value = true };
+            focus.Setters.Add(new Setter(Border.BorderBrushProperty, Theme.B(Theme.SelLine), "box"));
+            t.Triggers.Insert(t.Triggers.Count - 1, focus);
+
             s.Setters.Add(new Setter(Control.TemplateProperty, t));
+            s.Setters.Add(new Setter(Control.FocusVisualStyleProperty, null));
             s.Setters.Add(new Setter(Control.BackgroundProperty, Brushes.Transparent));
             s.Setters.Add(new Setter(Control.BorderThicknessProperty, new Thickness(0)));
             s.Seal();
@@ -921,6 +977,31 @@ namespace CoolDeck
                 Padding = new Thickness(12), Margin = new Thickness(0, 6, 0, 0)
             };
             var st = new StackPanel();
+
+            // One-click game mode. Placed first in the card because it is the only control here
+            // that changes how the machine behaves *while* you are playing rather than after.
+            _gameMode = new CheckBox
+            {
+                Content = Loc.T("Game mode"),
+                IsChecked = GameMode.Enabled,
+                Foreground = Theme.TxtBrush,
+                FontSize = 11.5,
+                Margin = new Thickness(2, 0, 0, 3),
+                Cursor = Cursors.Hand,
+                Padding = new Thickness(0),
+                Style = CheckBoxStyle()
+            };
+            _gameMode.Checked += delegate { if (!_suppressGameMode) ApplyGameMode(true); };
+            _gameMode.Unchecked += delegate { if (!_suppressGameMode) ApplyGameMode(false); };
+            st.Children.Add(_gameMode);
+
+            _gameModeHint = new TextBlock
+            {
+                Text = Loc.T("fan max \u00b7 game High priority \u00b7 recording off"),
+                FontSize = 9.2, Foreground = Theme.TxtFaintBrush,
+                Margin = new Thickness(2, 0, 0, 12), TextWrapping = TextWrapping.Wrap
+            };
+            st.Children.Add(_gameModeHint);
 
             // The persistence switch. Without this the curve only lives in the EC, and a boot
             // that comes back in Automatic silently voids it.

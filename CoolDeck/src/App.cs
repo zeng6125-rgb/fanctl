@@ -24,7 +24,7 @@ namespace CoolDeck
         static System.Windows.Application _app;
         static NotifyIcon _tray;
         static MainWindow _win;
-        static ToolStripMenuItem _miAuto, _miMax, _miSilent, _miCustom;
+        static ToolStripMenuItem _miAuto, _miMax, _miSilent, _miCustom, _miGame;
 
         /// <summary>True when the process was launched only to sit in the tray (boot
         /// autostart). The window is never shown, but the controller still starts and
@@ -61,9 +61,13 @@ namespace CoolDeck
                 return;
             }
 
+            // Only the surviving instance touches the registry: a second launch must never race
+            // the first one's rollback. If the previous run died with game mode on, this puts
+            // the machine back before the window even opens.
+            GameMode.RecoverIfNeeded();
+
             var app = new System.Windows.Application();
-            _app = app;
-            app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            _app = app;            app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
             // Software rendering: keeps the window paintable over RDP, on locked
             // sessions and on machines with flaky WPF hardware acceleration.
@@ -160,6 +164,19 @@ namespace CoolDeck
             menu.Items.Add(_miCustom);
             menu.Items.Add(new ToolStripSeparator());
 
+            // One click from the tray is the whole point of this entry: no window, no digging.
+            // The tick is read from GameMode's own state, which the window switch drives too.
+            _miGame = new ToolStripMenuItem(Loc.T("Game mode"));
+            _miGame.Checked = GameMode.Enabled;
+            _miGame.Click += delegate
+            {
+                _win.SetGameMode(!GameMode.Enabled);
+                _miGame.Checked = GameMode.Enabled;
+                SyncModes();
+            };
+            menu.Items.Add(_miGame);
+            menu.Items.Add(new ToolStripSeparator());
+
             var auto = new ToolStripMenuItem("Start with Windows");
             // The tick is a live read of the HKCU Run key, never a cached flag: regedit,
             // a moved exe or a sibling install can change it while we sit in the tray.
@@ -172,6 +189,7 @@ namespace CoolDeck
             menu.Opening += delegate
             {
                 auto.Checked = AutoStartIsEnabled();
+                _miGame.Checked = GameMode.Enabled;
                 SyncModes();
             };
 
@@ -180,6 +198,9 @@ namespace CoolDeck
             {
                 _tray.Visible = false;
                 _win.RealClose = true;
+                // Never leave the machine tweaked just because the tray icon was closed while
+                // game mode happened to be on.
+                GameMode.Shutdown();
                 _win.Close();
                 _tray.Dispose();
                 // OnExplicitShutdown means closing the last window does NOT stop the
